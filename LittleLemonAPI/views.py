@@ -1,10 +1,11 @@
 from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.models import User, Group
 from rest_framework import generics, viewsets, response, status
 from rest_framework.permissions import BasePermission, IsAuthenticated, IsAdminUser
+from rest_framework.exceptions import PermissionDenied
 from .models import MenuItem, Cart, OrderItem, Order
-from .serializers import MenuItemSerializer, UserSerializer, CartSerializer, OrderItemSerializer
-from django.contrib.auth.models import User, Group
-from rest_framework.decorators import api_view, permission_classes
+from .serializers import MenuItemSerializer, UserSerializer, CartSerializer, OrderItemSerializer, OrderSerializer
+
 import datetime
 
 class IsManagerOrReadOnly(BasePermission):
@@ -16,6 +17,10 @@ class IsManagerOrReadOnly(BasePermission):
 class IsManager(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.groups.filter(name='Manager').exists()
+    
+class IsDeliveryCrew(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.groups.filter(name='Delivery crew').exists()
     
 class MenuItemsView(generics.ListCreateAPIView):
     queryset = MenuItem.objects.all()
@@ -30,7 +35,7 @@ class SingleMenuItemView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class ManagerView(viewsets.ViewSet):
-    permission_classes = [IsManager]
+    permission_classes = [IsAdminUser|IsManager]
     def list(self, request):
         group = Group.objects.get(name='Manager')
         serializer = UserSerializer(group.user_set.all(), many=True)
@@ -43,15 +48,15 @@ class ManagerView(viewsets.ViewSet):
             group = Group.objects.get(name='Manager')
             group.user_set.add(user)
             
-        return response.Response({'message': 'user added'}, status=status.HTTP_201_CREATED)
+        return response.Response({'detail': 'user added'}, status=status.HTTP_201_CREATED)
         
     def destroy(self, request, pk=None):
         if pk:
             user = get_object_or_404(User, pk=pk)
             group = Group.objects.get(name='Manager')
             group.user_set.remove(user)
-            return response.Response({'message': 'user removed'}, status=status.HTTP_200_OK)
-        return response.Response({'message': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
+            return response.Response({'detail': 'user removed'}, status=status.HTTP_200_OK)
+        return response.Response({'detail': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
     
 class DeliveryCrewView(viewsets.ViewSet):
     permission_classes = [IsManager]
@@ -67,15 +72,15 @@ class DeliveryCrewView(viewsets.ViewSet):
             group = Group.objects.get(name='Delivery Crew')
             group.user_set.add(user)
             
-        return response.Response({'message': 'user added'}, status=status.HTTP_201_CREATED)
+        return response.Response({'detail': 'user added'}, status=status.HTTP_201_CREATED)
         
     def destroy(self, request, pk=None):
         if pk:
             user = get_object_or_404(User, pk=pk)
             group = Group.objects.get(name='Delivery Crew')
             group.user_set.remove(user)
-            return response.Response({"message": "user removed"}, status=status.HTTP_200_OK)
-        return response.Response({'message': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
+            return response.Response({"detail": "user removed"}, status=status.HTTP_200_OK)
+        return response.Response({'detail': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
     
 class CartView(generics.ListCreateAPIView):
     serializer_class = CartSerializer
@@ -92,13 +97,18 @@ class CartView(generics.ListCreateAPIView):
     def delete(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         queryset.delete()
-        return response.Response({'message': 'cart deleted'}, status=status.HTTP_200_OK)
+        return response.Response({'detail': 'cart deleted'}, status=status.HTTP_200_OK)
     
 class OrderView(generics.ListCreateAPIView):
     serializer_class = OrderItemSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        if IsManager.has_permission(self, self.request, None):
+            return OrderItem.objects.all()
+        if IsDeliveryCrew.has_permission(self, self.request, None):
+            delivery_orders = Order.objects.filter(delivery_crew=self.request.user)
+            return OrderItem.objects.filter(order__in=delivery_orders)
         user_orders = Order.objects.filter(user=self.request.user)
         return OrderItem.objects.filter(order__in=user_orders)
     
@@ -107,7 +117,7 @@ class OrderView(generics.ListCreateAPIView):
         context.update({'request': self.request})
         return context
     
-    def create(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         cart = Cart.objects.filter(user=self.request.user)
         if cart.count() > 0:
             
@@ -130,8 +140,50 @@ class OrderView(generics.ListCreateAPIView):
                 order_item.save()
                 order.save()
             cart.delete()
-            return response.Response({'message': 'order created'}, status=status.HTTP_200_OK)
+            return response.Response({'detail': 'order created'}, status=status.HTTP_200_OK)
         
-        return response.Response({'message': 'failed to create order - empty cart'}, status=status.HTTP_400_BAD_REQUEST)
+        return response.Response({'detail': 'failed to create order - empty cart'}, status=status.HTTP_400_BAD_REQUEST)
     
 
+class SingleOrderView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def check_permissions(self, request):
+        if request.method == 'PATCH':
+            if not (IsManager.has_permission(self, self.request, None) or IsDeliveryCrew.has_permission(self, self.request, None)):
+                raise PermissionDenied()
+        if request.method == 'PUT' or request.method == 'DELETE':
+            if not IsManager.has_permission(self, self.request, None):
+                raise PermissionDenied()
+
+    def get_queryset(self):
+        pk = self.kwargs['pk']
+
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            return Order.objects.filter(pk=pk)
+
+        if not IsAuthenticated.has_permission(self, self.request, None):
+            raise PermissionDenied('you must be logged in to view your order')
+        
+        order = get_object_or_404(Order, pk=pk)
+        if IsManager.has_permission(self, self.request, None) or order.user == self.request.user or order.delivery_crew == self.request.user:
+            return OrderItem.objects.filter(order=order)
+        else:
+            return response.Response({'detail': 'order does not belong to user'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    def get(self, request, *args, **kwargs):
+        order = self.get_queryset()
+        serializer = OrderItemSerializer(instance=order, many=True)
+        return response.Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def patch(self, request, *args, **kwargs):
+        # Delivery crew can only change Order status
+        if not IsManager.has_permission(self, request, None):
+            instance = self.get_object()
+            instance.status = request.data['status']
+            instance.save()
+            serializer = self.get_serializer(instance)
+            return response.Response(serializer.data, status=status.HTTP_200_OK)
+        return super().patch(request, *args, **kwargs)
+    

@@ -50,6 +50,8 @@ class CartSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     user_username = serializers.ReadOnlyField(source='user.username')
+    total = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
+    date = serializers.DateField(read_only=True)
 
     class Meta:
         model = Order

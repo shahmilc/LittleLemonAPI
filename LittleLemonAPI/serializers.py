@@ -32,11 +32,12 @@ class UserSerializer(serializers.ModelSerializer):
 
 class CartSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    menuitem_title = serializers.ReadOnlyField(source='menuitem.title')
     unit_price = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
     price = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
     class Meta:
         model = Cart
-        fields = ['menuitem', 'quantity', 'unit_price', 'price', 'user']
+        fields = ['menuitem', 'menuitem_title', 'quantity', 'unit_price', 'price', 'user']
 
     def create(self, validated_data):
         user_id = self.context['request'].user.id

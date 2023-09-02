@@ -3,8 +3,8 @@ from django.contrib.auth.models import User, Group
 from rest_framework import generics, viewsets, response, status
 from rest_framework.permissions import BasePermission, IsAuthenticated, IsAdminUser
 from rest_framework.exceptions import PermissionDenied
-from .models import MenuItem, Cart, OrderItem, Order
-from .serializers import MenuItemSerializer, UserSerializer, CartSerializer, OrderItemSerializer, OrderSerializer
+from .models import Category, MenuItem, Cart, OrderItem, Order
+from .serializers import CategorySerializer, MenuItemSerializer, UserSerializer, CartSerializer, OrderItemSerializer, OrderSerializer
 
 import datetime
 
@@ -22,10 +22,21 @@ class IsDeliveryCrew(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.groups.filter(name='Delivery crew').exists()
     
+class CategoryView(generics.ListCreateAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAdminUser]
+
+class SingleCategoryView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAdminUser]
+
 class MenuItemsView(generics.ListCreateAPIView):
     queryset = MenuItem.objects.all()
     serializer_class = MenuItemSerializer
-    permission_classes = [IsManagerOrReadOnly]
+    permission_classes = [IsAdminUser|IsManagerOrReadOnly]
+    ordering_fields = ['price', 'category']
 
 class SingleMenuItemView(generics.RetrieveUpdateDestroyAPIView):
     queryset = MenuItem.objects.all()
@@ -34,7 +45,7 @@ class SingleMenuItemView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class ManagerView(viewsets.ViewSet):
-    permission_classes = [IsAdminUser|IsManager]
+    permission_classes = [IsAdminUser]
     def list(self, request):
         group = Group.objects.get(name='Manager')
         serializer = UserSerializer(group.user_set.all(), many=True)

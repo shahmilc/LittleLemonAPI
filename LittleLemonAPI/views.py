@@ -1,26 +1,13 @@
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.models import User, Group
 from rest_framework import generics, viewsets, response, status
-from rest_framework.permissions import BasePermission, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.exceptions import PermissionDenied
+from .permissions import IsManager, IsManagerOrReadOnly, IsDeliveryCrew
 from .models import Category, MenuItem, Cart, OrderItem, Order
 from .serializers import CategorySerializer, MenuItemSerializer, UserSerializer, CartSerializer, OrderItemSerializer, OrderSerializer
 
 import datetime
-
-class IsManagerOrReadOnly(BasePermission):
-    def has_permission(self, request, view):
-        if request.method == 'GET':
-            return True
-        return request.user.is_authenticated and request.user.groups.filter(name='Manager').exists()
-    
-class IsManager(BasePermission):
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.groups.filter(name='Manager').exists()
-    
-class IsDeliveryCrew(BasePermission):
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.groups.filter(name='Delivery crew').exists()
     
 class CategoryView(generics.ListCreateAPIView):
     queryset = Category.objects.all()

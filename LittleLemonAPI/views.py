@@ -72,7 +72,7 @@ class CartView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Cart.objects.filter(user=self.request.user)
+        return Cart.objects.filter(user=self.request.user).select_related('user').select_related('menuitem')
     
     def get_serializer_context(self):
         context = super().get_serializer_context()

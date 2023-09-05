@@ -10,9 +10,13 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ['id', 'title']
 
 class MenuItemSerializer(serializers.ModelSerializer):
+    category_title = serializers.ReadOnlyField(source='category.title')
     class Meta:
         model = MenuItem
-        fields = ['id', 'title', 'price', 'featured', 'category']
+        fields = ['id', 'title', 'price', 'featured', 'category', 'category_title']
+        extra_kwargs = {
+            'category': {'write_only': True}
+        }
 
 class UserSerializer(serializers.ModelSerializer):
     email = serializers.CharField(read_only=True)
@@ -32,11 +36,13 @@ class UserSerializer(serializers.ModelSerializer):
 class CartSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     menuitem_title = serializers.ReadOnlyField(source='menuitem.title')
-    unit_price = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
-    price = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
     class Meta:
         model = Cart
         fields = ['menuitem', 'menuitem_title', 'quantity', 'unit_price', 'price', 'user']
+        extra_kwargs = {
+            'unit_price': {'read_only': True},
+            'price': {'read_only': True}
+        }
 
     def create(self, validated_data):
         user_id = self.context['request'].user.id
@@ -50,12 +56,14 @@ class CartSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     user_username = serializers.ReadOnlyField(source='user.username')
-    total = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
-    date = serializers.DateField(read_only=True)
 
     class Meta:
         model = Order
         fields = ['id', 'user_username', 'delivery_crew', 'status', 'total', 'date']
+        extra_kwargs = {
+            'date': {'read_only': True},
+            'total': {'read_only': True}
+        }
 
     def create(self, validated_data):
         user_id = self.context['request'].user.id
@@ -66,10 +74,12 @@ class OrderSerializer(serializers.ModelSerializer):
 class OrderItemSerializer(serializers.ModelSerializer):
     order = OrderSerializer(read_only=True)
     menuitem_title = serializers.ReadOnlyField(source='menuitem.title')
-    quantity = serializers.IntegerField(read_only=True)
-    unit_price = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
-    price = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
 
     class Meta:
         model = OrderItem
         fields = ['order', 'menuitem_title', 'quantity', 'unit_price', 'price']
+        extra_kwargs = {
+            'quantity': {'read_only': True},
+            'unit_price': {'read_only': True},
+            'price': {'read_only': True}
+        }

@@ -30,11 +30,12 @@ class SingleMenuItemView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = MenuItemSerializer
     permission_classes = [IsManagerOrReadOnly]
 
+class BaseGroupView(viewsets.ViewSet):
+    permission_classes = None
+    group_name = None
 
-class ManagerView(viewsets.ViewSet):
-    permission_classes = [IsAdminUser]
     def list(self, request):
-        group = Group.objects.get(name='Manager')
+        group = Group.objects.get(name=self.group_name)
         serializer = UserSerializer(group.user_set.all(), many=True)
         return response.Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -42,7 +43,7 @@ class ManagerView(viewsets.ViewSet):
         username = request.data['username']
         if username:
             user = get_object_or_404(User, username=username)
-            group = Group.objects.get(name='Manager')
+            group = Group.objects.get(name=self.group_name)
             group.user_set.add(user)
             
         return response.Response({'detail': 'user added'}, status=status.HTTP_201_CREATED)
@@ -50,34 +51,20 @@ class ManagerView(viewsets.ViewSet):
     def destroy(self, request, pk=None):
         if pk:
             user = get_object_or_404(User, pk=pk)
-            group = Group.objects.get(name='Manager')
+            group = Group.objects.get(name=self.group_name)
             group.user_set.remove(user)
             return response.Response({'detail': 'user removed'}, status=status.HTTP_200_OK)
         return response.Response({'detail': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-class DeliveryCrewView(viewsets.ViewSet):
-    permission_classes = [IsManager]
-    def list(self, request):
-        group = Group.objects.get(name='Delivery Crew')
-        serializer = UserSerializer(group.user_set.all(), many=True)
-        return response.Response(serializer.data, status=status.HTTP_200_OK)
 
-    def create(self, request):
-        username = request.data['username']
-        if username:
-            user = get_object_or_404(User, username=username)
-            group = Group.objects.get(name='Delivery Crew')
-            group.user_set.add(user)
-            
-        return response.Response({'detail': 'user added'}, status=status.HTTP_201_CREATED)
-        
-    def destroy(self, request, pk=None):
-        if pk:
-            user = get_object_or_404(User, pk=pk)
-            group = Group.objects.get(name='Delivery Crew')
-            group.user_set.remove(user)
-            return response.Response({"detail": "user removed"}, status=status.HTTP_200_OK)
-        return response.Response({'detail': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
+class ManagerView(BaseGroupView):
+    # Allow only Admin superusers to add or remove Managers
+    permission_classes = [IsAdminUser]
+    group_name = 'Manager'
+
+class DeliveryCrewView(BaseGroupView):
+    # Allow only Managers to add, remove, or assign Delivery crews
+    permission_classes = [IsManager]
+    group_name = 'Delivery crew'
     
 class CartView(generics.ListCreateAPIView):
     serializer_class = CartSerializer
@@ -147,9 +134,11 @@ class SingleOrderView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def check_permissions(self, request):
+        # Allow only Managers and Delivery crew to make partial updates
         if request.method == 'PATCH':
             if not (IsManager.has_permission(self, self.request, None) or IsDeliveryCrew.has_permission(self, self.request, None)):
                 raise PermissionDenied()
+        # Allow only Managers to completely change or delete orders
         if request.method == 'PUT' or request.method == 'DELETE':
             if not IsManager.has_permission(self, self.request, None):
                 raise PermissionDenied()
@@ -159,11 +148,9 @@ class SingleOrderView(generics.RetrieveUpdateDestroyAPIView):
 
         if self.request.method in ['PUT', 'PATCH', 'DELETE']:
             return Order.objects.filter(pk=pk)
-
-        if not IsAuthenticated.has_permission(self, self.request, None):
-            raise PermissionDenied('you must be logged in to view your order')
         
         order = get_object_or_404(Order, pk=pk)
+        # User can view an order if they're a Manager, or if its their own order, or for Delivery crews if it's their order to deliver
         if IsManager.has_permission(self, self.request, None) or order.user == self.request.user or order.delivery_crew == self.request.user:
             return OrderItem.objects.filter(order=order)
         else:

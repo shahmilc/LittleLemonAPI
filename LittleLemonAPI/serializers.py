@@ -10,10 +10,9 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ['id', 'title']
 
 class MenuItemSerializer(serializers.ModelSerializer):
-    category_title = serializers.ReadOnlyField(source='category.title')
     class Meta:
         model = MenuItem
-        fields = ['title', 'price', 'featured', 'category_title']
+        fields = ['id', 'title', 'price', 'featured', 'category']
 
 class UserSerializer(serializers.ModelSerializer):
     email = serializers.CharField(read_only=True)

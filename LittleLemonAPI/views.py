@@ -20,7 +20,8 @@ class SingleCategoryView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminUser]
 
 class MenuItemsView(generics.ListCreateAPIView):
-    queryset = MenuItem.objects.all()
+    # select_related reduces database hits at the serializer
+    queryset = MenuItem.objects.all().select_related('category')
     serializer_class = MenuItemSerializer
     permission_classes = [IsAdminUser|IsManagerOrReadOnly]
     ordering_fields = ['price', 'category']
@@ -89,12 +90,12 @@ class OrderView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         if IsManager.has_permission(self, self.request, None):
-            return OrderItem.objects.all()
+            return OrderItem.objects.all().select_related('order')
         if IsDeliveryCrew.has_permission(self, self.request, None):
             delivery_orders = Order.objects.filter(delivery_crew=self.request.user)
-            return OrderItem.objects.filter(order__in=delivery_orders)
+            return OrderItem.objects.filter(order__in=delivery_orders).select_related('order')
         user_orders = Order.objects.filter(user=self.request.user)
-        return OrderItem.objects.filter(order__in=user_orders)
+        return OrderItem.objects.filter(order__in=user_orders).select_related('order')
     
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -152,7 +153,7 @@ class SingleOrderView(generics.RetrieveUpdateDestroyAPIView):
         order = get_object_or_404(Order, pk=pk)
         # User can view an order if they're a Manager, or if its their own order, or for Delivery crews if it's their order to deliver
         if IsManager.has_permission(self, self.request, None) or order.user == self.request.user or order.delivery_crew == self.request.user:
-            return OrderItem.objects.filter(order=order)
+            return OrderItem.objects.filter(order=order).select_related('order')
         else:
             return response.Response({'detail': 'order does not belong to user'}, status=status.HTTP_401_UNAUTHORIZED)
     

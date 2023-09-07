@@ -12,18 +12,18 @@ import datetime
 class CategoryView(generics.ListCreateAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsManager]
 
 class SingleCategoryView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsManager]
 
 class MenuItemsView(generics.ListCreateAPIView):
     # select_related reduces database hits at the serializer
     queryset = MenuItem.objects.all().select_related('category')
     serializer_class = MenuItemSerializer
-    permission_classes = [IsAdminUser|IsManagerOrReadOnly]
+    permission_classes = [IsManagerOrReadOnly]
     ordering_fields = ['price', 'category']
     search_fields = ['title', 'category']
 
@@ -89,6 +89,7 @@ class CartView(generics.ListCreateAPIView):
 
 class OrderView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
+    ordering_fields = ['user_username', 'delivery_crew', 'status', 'date', 'total']
 
     def get_queryset(self):
         # Managers can see all Orders

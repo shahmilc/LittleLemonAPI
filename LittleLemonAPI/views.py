@@ -90,6 +90,7 @@ class CartView(generics.ListCreateAPIView):
 class OrderView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     ordering_fields = ['user_username', 'delivery_crew', 'status', 'date', 'total']
+    search_fields = ['user__username', 'delivery_crew__username', 'orderitems__menuitem__title']
 
     def get_queryset(self):
         # Managers can see all Orders

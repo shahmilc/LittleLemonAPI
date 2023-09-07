@@ -56,10 +56,10 @@ class CartSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     user_username = serializers.ReadOnlyField(source='user.username')
-
+    orderitems = serializers.StringRelatedField(many=True, read_only=True)
     class Meta:
         model = Order
-        fields = ['id', 'user_username', 'delivery_crew', 'status', 'total', 'date']
+        fields = ['id', 'user_username', 'delivery_crew', 'status', 'total', 'date', 'orderitems']
         extra_kwargs = {
             'date': {'read_only': True},
             'total': {'read_only': True}

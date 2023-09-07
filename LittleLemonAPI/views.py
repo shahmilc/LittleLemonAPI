@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.models import User, Group
 from rest_framework import generics, viewsets, response, status
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, SAFE_METHODS
 from rest_framework.exceptions import PermissionDenied
 from .permissions import IsManager, IsManagerOrReadOnly, IsDeliveryCrew
 from .models import Category, MenuItem, Cart, OrderItem, Order
@@ -25,6 +25,7 @@ class MenuItemsView(generics.ListCreateAPIView):
     serializer_class = MenuItemSerializer
     permission_classes = [IsAdminUser|IsManagerOrReadOnly]
     ordering_fields = ['price', 'category']
+    search_fields = ['title', 'category']
 
 class SingleMenuItemView(generics.RetrieveUpdateDestroyAPIView):
     queryset = MenuItem.objects.all()
@@ -71,6 +72,7 @@ class CartView(generics.ListCreateAPIView):
     serializer_class = CartSerializer
     permission_classes = [IsAuthenticated]
 
+    # Users can only see their own Cart
     def get_queryset(self):
         return Cart.objects.filter(user=self.request.user).select_related('user').select_related('menuitem')
     
@@ -84,24 +86,28 @@ class CartView(generics.ListCreateAPIView):
         queryset.delete()
         return response.Response({'detail': 'cart deleted'}, status=status.HTTP_200_OK)
     
+
 class OrderView(generics.ListCreateAPIView):
-    serializer_class = OrderItemSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        # Managers can see all Orders
         if IsManager.has_permission(self, self.request, None):
-            return OrderItem.objects.all().select_related('order')
+            return Order.objects.all().prefetch_related('orderitems').all()
+        # Delivery crew can only see Orders they're assigned to deliver
         if IsDeliveryCrew.has_permission(self, self.request, None):
-            delivery_orders = Order.objects.filter(delivery_crew=self.request.user)
-            return OrderItem.objects.filter(order__in=delivery_orders).select_related('order')
-        user_orders = Order.objects.filter(user=self.request.user)
-        return OrderItem.objects.filter(order__in=user_orders).select_related('order')
-    
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context.update({'request': self.request})
-        return context
-    
+            return Order.objects.filter(delivery_crew=self.request.user).prefetch_related('orderitems').all()
+        # Customers can see their own orders
+        return Order.objects.filter(user=self.request.user).prefetch_related('orderitems').all()
+
+    def get_serializer_class(self):
+        if self.request.method in SAFE_METHODS:
+            return OrderSerializer
+        else:
+            return OrderItemSerializer
+
+    # POST request sent to endpoint should retrieve all items in Cart, create an Order,
+    # create OrderItems for all the Cart items, assign the OrderItems to the Order
     def post(self, request, *args, **kwargs):
         cart = Cart.objects.filter(user=self.request.user)
         if cart.count() > 0:
@@ -128,40 +134,33 @@ class OrderView(generics.ListCreateAPIView):
             return response.Response({'detail': 'order created'}, status=status.HTTP_200_OK)
         
         return response.Response({'detail': 'failed to create order - empty cart'}, status=status.HTTP_400_BAD_REQUEST)
-    
+
 
 class SingleOrderView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
+    queryset = Order.objects.all().prefetch_related('orderitems')
 
     def check_permissions(self, request):
+        is_manager = IsManager.has_permission(self, self.request, None)
+        is_delivery_crew = IsDeliveryCrew.has_permission(self, self.request, None)
+        # Allow only Managers and the Order's customer to see a specific Order
+        if request.method in SAFE_METHODS:
+            pk = self.kwargs['pk']
+            order = get_object_or_404(Order, pk=pk)
+            if not is_manager and order.user != request.user:
+                raise PermissionDenied()
         # Allow only Managers and Delivery crew to make partial updates
         if request.method == 'PATCH':
-            if not (IsManager.has_permission(self, self.request, None) or IsDeliveryCrew.has_permission(self, self.request, None)):
+            if not (is_manager or is_delivery_crew):
                 raise PermissionDenied()
-        # Allow only Managers to completely change or delete orders
+        # Allow only Managers to completely change or delete Orders
         if request.method == 'PUT' or request.method == 'DELETE':
-            if not IsManager.has_permission(self, self.request, None):
+            if not is_manager:
                 raise PermissionDenied()
 
-    def get_queryset(self):
-        pk = self.kwargs['pk']
+        return super().check_permissions(request)
 
-        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
-            return Order.objects.filter(pk=pk)
-        
-        order = get_object_or_404(Order, pk=pk)
-        # User can view an order if they're a Manager, or if its their own order, or for Delivery crews if it's their order to deliver
-        if IsManager.has_permission(self, self.request, None) or order.user == self.request.user or order.delivery_crew == self.request.user:
-            return OrderItem.objects.filter(order=order).select_related('order')
-        else:
-            return response.Response({'detail': 'order does not belong to user'}, status=status.HTTP_401_UNAUTHORIZED)
-    
-    def get(self, request, *args, **kwargs):
-        order = self.get_queryset()
-        serializer = OrderItemSerializer(instance=order, many=True)
-        return response.Response(serializer.data, status=status.HTTP_200_OK)
-    
     def patch(self, request, *args, **kwargs):
         # Delivery crew can only change Order status
         if not IsManager.has_permission(self, request, None):

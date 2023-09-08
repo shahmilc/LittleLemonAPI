@@ -1,6 +1,7 @@
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.models import User, Group
 from rest_framework import generics, viewsets, response, status
+from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, SAFE_METHODS
 from rest_framework.exceptions import PermissionDenied
 from .permissions import IsManager, IsManagerOrReadOnly, IsDeliveryCrew
@@ -10,16 +11,19 @@ from .serializers import CategorySerializer, MenuItemSerializer, UserSerializer,
 import datetime
     
 class CategoryView(generics.ListCreateAPIView):
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsManager]
 
 class SingleCategoryView(generics.RetrieveUpdateDestroyAPIView):
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsManager]
 
 class MenuItemsView(generics.ListCreateAPIView):
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
     # select_related reduces database hits at the serializer
     queryset = MenuItem.objects.all().select_related('category')
     serializer_class = MenuItemSerializer
@@ -28,11 +32,13 @@ class MenuItemsView(generics.ListCreateAPIView):
     search_fields = ['title', 'category']
 
 class SingleMenuItemView(generics.RetrieveUpdateDestroyAPIView):
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
     queryset = MenuItem.objects.all()
     serializer_class = MenuItemSerializer
     permission_classes = [IsManagerOrReadOnly]
 
 class BaseGroupView(viewsets.ViewSet):
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
     permission_classes = None
     group_name = None
 
@@ -59,16 +65,19 @@ class BaseGroupView(viewsets.ViewSet):
         return response.Response({'detail': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
 
 class ManagerView(BaseGroupView):
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
     # Allow only Admin superusers to add or remove Managers
     permission_classes = [IsAdminUser]
     group_name = 'Manager'
 
 class DeliveryCrewView(BaseGroupView):
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
     # Allow only Managers to add, remove, or assign Delivery crews
     permission_classes = [IsManager]
     group_name = 'Delivery crew'
     
 class CartView(generics.ListCreateAPIView):
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
     serializer_class = CartSerializer
     permission_classes = [IsAuthenticated]
 
@@ -88,6 +97,7 @@ class CartView(generics.ListCreateAPIView):
     
 
 class OrderView(generics.ListCreateAPIView):
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
     permission_classes = [IsAuthenticated]
     ordering_fields = ['user_username', 'delivery_crew', 'status', 'date', 'total']
     search_fields = ['user__username', 'delivery_crew__username', 'orderitems__menuitem__title']
@@ -139,6 +149,7 @@ class OrderView(generics.ListCreateAPIView):
 
 
 class SingleOrderView(generics.RetrieveUpdateDestroyAPIView):
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
     queryset = Order.objects.all().prefetch_related('orderitems')

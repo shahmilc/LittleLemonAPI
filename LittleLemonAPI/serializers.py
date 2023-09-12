@@ -15,7 +15,8 @@ class MenuItemSerializer(serializers.ModelSerializer):
         model = MenuItem
         fields = ['id', 'title', 'price', 'featured', 'category', 'category_title']
         extra_kwargs = {
-            'category': {'write_only': True}
+            'category': {'write_only': True},
+            'price': {'min_value': 1.00}
         }
 
 class UserSerializer(serializers.ModelSerializer):
@@ -40,6 +41,7 @@ class CartSerializer(serializers.ModelSerializer):
         model = Cart
         fields = ['menuitem', 'menuitem_title', 'quantity', 'unit_price', 'price', 'user']
         extra_kwargs = {
+            'quantity': {'min_value': 1},
             'unit_price': {'read_only': True},
             'price': {'read_only': True}
         }

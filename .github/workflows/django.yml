@@ -27,5 +27,7 @@ jobs:
         pip install pipenv
         pipenv install
     - name: Run Tests
+      env: 
+        DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
       run: |
         pipenv run python manage.py test

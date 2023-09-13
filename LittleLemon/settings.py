@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework.authtoken',
+    'rest_framework_simplejwt',
     'djoser',
     'django_filters',
     'LittleLemonAPI.apps.LittlelemonapiConfig',
@@ -134,6 +135,7 @@ REST_FRAMEWORK = {
         'rest_framework_xml.renderers.XMLRenderer',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],

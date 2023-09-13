@@ -1,5 +1,5 @@
 # LittleLemonAPI
-A backend REST API for restaurant order management applications, in this case, for a hypothetical restaurant 'Little Lemon'. The API allows for browsing of menu items and menu categories, addition of items to a cart, submission of the cart as an order, and management of the order through the assigning of delivery crews and status changes.
+A backend REST API for restaurant order management applications, in this case, for a hypothetical restaurant 'Little Lemon'. The API allows for browsing of menu items and menu categories, addition of items to a cart, submission of the cart as an order, and management of the order through the assigning of delivery crews and status changes. Full fledged authentication and authorization layers with the use of JSON Web Tokens (JWT) and Django roles.
 
 ## Table of Contents
 
@@ -20,8 +20,9 @@ A backend REST API for restaurant order management applications, in this case, f
 
 | Endpoint | Role | Method | Payload | Result |
 | --- | --- | --- | --- | --- |
-| `/token/login` | Any | `POST` | `username` and `password` | Returns an Auth Token if credentials valid |
 | `/api/users` | Any | `POST` | `username`, `password`, optional `email` | Creates a new user with supplied credentials |
+| `/api/token` | Any | `POST` | `username` and `password` | Returns a `refresh` token and an `access` token, if credentials valid |
+| `/api/token/refresh` | ANY | `POST` | `refresh` | Returns a new `access` token, if supplied `refresh` token is valid |
 | `/api/users/me` | Any | `GET` | - | Returns information of current user |
 
 ### Menu and Category endpoints
@@ -67,9 +68,15 @@ A backend REST API for restaurant order management applications, in this case, f
 
 ## Authentication and Authorization layers
 
-Users can register using the account registry endpoint, and use the registered username and password to retrieve an HTTP web token from the login endpoint. This token must be included as a Bearer token with the 'Token' prefix to make authenticated requests. This token does not expire.
+The authentication layer allows users to register using the account registry endpoint, and use the registered username and password to retrieve a pair of JSON Web Tokens (JWT) from the login endpoint. These tokens are the `access` token and the `refresh` token. 
+
+A valid `access` token must be included as a Bearer token (with no prefix) to make authenticated requests. `access` tokens expire every 30 minutes, a lifespan which is defined in [settings.py](LittleLemon/settings.py) under `SIMPLE_JWT` as `ACCESS_TOKEN_LIFETIME`.
+
+A new `access` token can be requested by providing the `refresh` token to the token renewal endpoint.
 
 The authorization layer uses Django roles to seperate user permissions. Admins are users created using Django's createsuperuser command. Managers are users with the 'Manager' role, Delivery crew are users with the 'Delivery crew' role, and Customers are authenticated users with no roles.
+
+Users can be assigned roles through the Django admin panel, or using the appropriate group management endpoints.
 
 ## Response format
 
@@ -90,7 +97,7 @@ The following endpoints have ordering and/or search functionality. The Ordering 
 
 ## Throttling
 
-The default throttle rates are defined in settings.py under `REST_FRAMEWORK` as `DEFAULT_THROTTLE_RATES`. By default, all endpoints have the following throttle rates:
+The default throttle rates are defined in [settings.py](LittleLemon/settings.py) under `REST_FRAMEWORK` as `DEFAULT_THROTTLE_RATES`. By default, all endpoints have the following throttle rates:
 
 | User Permission | Throttle Rate |
 | --- | --- |
@@ -99,6 +106,6 @@ The default throttle rates are defined in settings.py under `REST_FRAMEWORK` as 
 
 ## Pagination
 
-All responses are paginated, with a default and max of 3 results per page. This max is defined in settings.py under `REST_FRAMEWORK` as `PAGE_SIZE`. Using the `page` query string parameter allows for the retrieval of a specific page, e.g. `/api/menu-items?page=2`. 
+All responses are paginated, with a default and max of 3 results per page. This max is defined in [settings.py](LittleLemon/settings.py) under `REST_FRAMEWORK` as `PAGE_SIZE`. Using the `page` query string parameter allows for the retrieval of a specific page, e.g. `/api/menu-items?page=2`. 
 
 Using the `perpage` query string parameter allows to specify how many results per page (up to the max), e.g. `/api/menu-items?perpage=2&page=4`.

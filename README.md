@@ -1,5 +1,5 @@
 # LittleLemonAPI
-A backend REST API for restaurant order management applications, in this case, for a hypothetical restaurant 'Little Lemon'. The API allows for browsing of menu items and menu categories, addition of items to a cart, submission of the cart as an order, and management of the order through the assigning of delivery crews and status changes. Full fledged authentication and authorization layers with the use of JSON Web Tokens (JWT) and Django roles.
+A backend REST API for restaurant order management applications, in this case, for a hypothetical restaurant 'Little Lemon'. The API allows for browsing of menu items and menu categories, addition of items to a cart, submission of the cart as an order, and management of the order through the assigning of delivery crews and status changes. Functional authentication and authorization layers with the use of JSON Web Tokens (JWT) and Django roles.
 
 ## Table of Contents
 
